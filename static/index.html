@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GATE/NET Exam Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="background-pattern"></div>
+    <div class="chat-container">
+        <!-- Premium Header -->
+        <div class="chat-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="bot-avatar">
+                        <i class="fas fa-graduation-cap"></i>
+                        <div class="avatar-pulse"></div>
+                    </div>
+                    <div class="header-text">
+                        <h1>GATE/NET Exam Assistant</h1>
+                        <p class="header-subtitle">Your AI-powered study companion</p>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Messages Area -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message" data-message-id="welcome">
+                <div class="message-avatar">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="message-content">
+                    <div class="formatted-content">
+                        <p>🤖 <strong>Welcome to GATE/NET Exam Assistant!</strong></p>
+                        <p>I'm here to help you prepare for your GATE and NET engineering exams. I can assist with:</p>
+                        <p>📚 <strong>Subject Help:</strong><br>
+                        • Computer Science, Electronics, Electrical, Mechanical<br>
+                        • Problem-solving techniques<br>
+                        • Important formulas and concepts</p>
+                        <p>📖 <strong>Study Guidance:</strong><br>
+                        • Preparation strategies<br>
+                        • Time management tips<br>
+                        • Mock test preparation</p>
+                        <p>💡 <strong>Try asking:</strong><br>
+                        • "Help me with Computer Science topics"<br>
+                        • "What are important formulas for Electronics?"<br>
+                        • "Give me study strategy for GATE"<br>
+                        • "Explain thermodynamics concepts"</p>
+                        <p>Let's ace your exam together! 🎯✨</p>
+                    </div>
+                    <span class="message-time">Just now</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Premium Input Area -->
+        <div class="chat-input-container">
+            <div class="input-wrapper">
+                <div class="input-icon">
+                    <i class="fas fa-comment-dots"></i>
+                </div>
+                <input type="text" id="messageInput" placeholder="Ask about GATE/NET subjects, formulas, study tips..." maxlength="500" autocomplete="off">
+                <button id="sendButton" class="send-button" aria-label="Send message">
+                    <i class="fas fa-paper-plane"></i>
+                    <div class="button-ripple"></div>
+                </button>
+            </div>
+            <div class="input-hint">
+                <i class="fas fa-lightbulb"></i>
+                <span>Try: "Computer Science topics", "Electronics formulas", "Study strategy"</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
