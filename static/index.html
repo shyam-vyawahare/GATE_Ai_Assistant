@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GATE/NET Exam Assistant</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -15,13 +15,11 @@
         <div class="chat-header">
             <div class="header-content">
                 <div class="header-left">
-                    <div class="bot-avatar">
-                        <i class="fas fa-graduation-cap"></i>
-                        <div class="avatar-pulse"></div>
-                    </div>
+                    <img src="/static/logo/ganet.png" alt="GANET Logo" class="header-logo">
                     <div class="header-text">
-                        <h1>GATE/NET Exam Assistant</h1>
-                        <p class="header-subtitle">Your AI-powered study companion</p>
+                        <h1>GANET AI Assistant</h1>
+                        <p class="header-subtitle">GATE/NET Exam Assistant</p>
+                        <p class="header-tagline">Your AI-powered study companion & GATE/NET Exam Assistant</p>
                     </div>
                 </div>
                 <div class="header-status">
@@ -35,7 +33,7 @@
         <div class="chat-messages" id="chatMessages">
             <div class="message bot-message" data-message-id="welcome">
                 <div class="message-avatar">
-                    <i class="fas fa-graduation-cap"></i>
+                    <img src="/static/logo/ganet.png" alt="GANET AI" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">
                 </div>
                 <div class="message-content">
                     <div class="formatted-content">
@@ -80,6 +78,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js"></script>
+    <script src="/static/script.js?v=3"></script>
 </body>
 </html>

@@ -39,7 +39,13 @@ echo Installing required packages...
 .venv\Scripts\python.exe -m pip install --upgrade pip
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
+echo.
+echo ==== GATE/NET Exam Assistant Running on ====
+echo http://127.0.0.1:8000
+echo.
+
 echo Starting GATE/NET Exam Assistant (FastAPI app) on http://127.0.0.1:8000 ...
 .venv\Scripts\python.exe main.py
+
 
 pause

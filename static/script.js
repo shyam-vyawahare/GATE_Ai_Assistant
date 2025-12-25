@@ -10,9 +10,18 @@ class PremiumChatBot {
         this.chatMessages = document.getElementById('chatMessages');
         this.isLoading = false;
         this.isRevealing = false;
+        this.userId = 'user_' + Math.random().toString(36).slice(2);
+        
+        // Configurable typing speed
+        this.typingSpeed = this.isMobile() ? 15 : 25; // Faster on mobile
+        this.skipAnimation = false;
         
         this.initializeEventListeners();
         this.setupWelcomeMessage();
+    }
+    
+    isMobile() {
+        return window.innerWidth <= 768;
     }
     
     initializeEventListeners() {
@@ -84,7 +93,7 @@ class PremiumChatBot {
             // Remove typing indicator
             this.removeTypingIndicator();
             
-            // Add bot response with character-by-character reveal
+            // Add bot response with DOM-based reveal animation
             await this.addBotMessageWithReveal(response.response);
             
         } catch (error) {
@@ -93,6 +102,10 @@ class PremiumChatBot {
             this.addMessage('Sorry, I encountered an error. Please try again.', 'bot');
         } finally {
             this.setLoadingState(false);
+            // Re-focus input for desktop
+            if (!this.isMobile()) {
+                this.messageInput.focus();
+            }
         }
     }
     
@@ -104,7 +117,7 @@ class PremiumChatBot {
             },
             body: JSON.stringify({
                 message: message,
-                user_id: 'user_' + Date.now()
+                user_id: this.userId
             })
         });
         
@@ -122,9 +135,16 @@ class PremiumChatBot {
         const avatar = document.createElement('div');
         avatar.className = 'message-avatar';
         
-        const icon = document.createElement('i');
-        icon.className = sender === 'bot' ? 'fas fa-graduation-cap' : 'fas fa-user';
-        avatar.appendChild(icon);
+        if (sender === 'bot') {
+            const img = document.createElement('img');
+            img.src = '/static/logo/ganet.png';
+            img.alt = 'GANET AI';
+            avatar.appendChild(img);
+        } else {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-user';
+            avatar.appendChild(icon);
+        }
         
         const content = document.createElement('div');
         content.className = 'message-content';
@@ -147,187 +167,179 @@ class PremiumChatBot {
     async addBotMessageWithReveal(text) {
         if (this.isRevealing) return;
         this.isRevealing = true;
-        
+        this.skipAnimation = false;
+
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message bot-message';
         
         const avatar = document.createElement('div');
         avatar.className = 'message-avatar';
-        const icon = document.createElement('i');
-        icon.className = 'fas fa-graduation-cap';
-        avatar.appendChild(icon);
+        
+        const img = document.createElement('img');
+        img.src = '/static/logo/ganet.png';
+        img.alt = 'GANET AI';
+        avatar.appendChild(img);
         
         const content = document.createElement('div');
         content.className = 'message-content';
         
-        // Create container for formatted content
-        const formattedContainer = document.createElement('div');
-        formattedContainer.className = 'formatted-content';
+        // Skip Animation Button
+        const skipBtn = document.createElement('div');
+        skipBtn.className = 'skip-animation-btn';
+        skipBtn.innerHTML = '<i class="fas fa-forward"></i>';
+        skipBtn.title = "Skip animation";
+        skipBtn.onclick = () => { this.skipAnimation = true; };
+        content.appendChild(skipBtn);
         
-        // Show thinking animation first
-        const thinkingDiv = document.createElement('div');
-        thinkingDiv.className = 'thinking-animation';
-        formattedContainer.appendChild(thinkingDiv);
+        // Prepare Content Structure
+        const formattedContainer = this.formatMessage(text);
+        // Ensure white-space is pre-wrap
+        formattedContainer.style.whiteSpace = 'pre-wrap';
         
-        messageDiv.appendChild(avatar);
+        // We will traverse the DOM tree and animate text nodes
+        const textNodes = [];
+        const walk = document.createTreeWalker(formattedContainer, NodeFilter.SHOW_TEXT, null, false);
+        let n;
+        while(n = walk.nextNode()) textNodes.push(n);
+        
+        // Store original text and clear it
+        const nodeData = textNodes.map(node => {
+            const originalText = node.textContent;
+            node.textContent = ''; 
+            return { node, text: originalText };
+        });
+        
+        // Hide list items initially so bullets don't appear empty
+        const listItems = formattedContainer.querySelectorAll('li');
+        listItems.forEach(li => li.style.opacity = '0');
+        
         content.appendChild(formattedContainer);
-        messageDiv.appendChild(content);
         
+        // Time stamp
         const time = document.createElement('span');
         time.className = 'message-time';
         time.textContent = this.getCurrentTime();
         content.appendChild(time);
         
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(content);
+        
         this.chatMessages.appendChild(messageDiv);
         this.scrollToBottom();
         
-        // Wait a bit for thinking animation
-        await this.delay(800);
+        // Animation Loop
+        for (const data of nodeData) {
+            // If skip requested, finish everything immediately
+            if (this.skipAnimation) {
+                data.node.textContent = data.text;
+                const li = data.node.parentElement.closest('li');
+                if (li) li.style.opacity = '1';
+                continue;
+            }
+            
+            // Show parent list item if we are about to type in it
+            const li = data.node.parentElement.closest('li');
+            if (li) li.style.opacity = '1';
+            
+            // Tokenize by word to preserve spaces
+            // Split by whitespace but keep delimiters
+            const tokens = data.text.split(/(\s+)/);
+            
+            for (const token of tokens) {
+                if (this.skipAnimation) {
+                    data.node.textContent = data.text;
+                    break;
+                }
+                
+                data.node.textContent += token;
+                
+                // Only delay if it's not just whitespace (unless it's a newline)
+                // Actually, constant delay per word/token feels better
+                // But let's skip delay for spaces to make it snappier
+                if (/\S/.test(token)) {
+                    await this.delay(this.typingSpeed);
+                }
+                
+                // Use instant scroll during typing to prevent lag/jumpiness
+                this.scrollToBottom(false);
+            }
+        }
         
-        // Remove thinking animation
-        thinkingDiv.remove();
-        
-        // Format and reveal text character by character
-        const formattedText = this.formatMessage(text);
-        await this.revealContent(formattedContainer, formattedText);
+        // Clean up
+        skipBtn.remove();
+        // Ensure everything is visible in case we missed something
+        listItems.forEach(li => li.style.opacity = '1');
         
         this.isRevealing = false;
-        this.scrollToBottom();
-    }
-    
-    async revealContent(container, element) {
-        // Clone the formatted element
-        const cloned = element.cloneNode(true);
-        
-        // Find all text nodes and replace with character spans
-        const walker = document.createTreeWalker(
-            cloned,
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-        );
-        
-        const textNodes = [];
-        let node;
-        while (node = walker.nextNode()) {
-            if (node.textContent.trim()) {
-                textNodes.push(node);
-            }
-        }
-        
-        // Replace text nodes with character spans
-        let globalDelay = 0;
-        for (const textNode of textNodes) {
-            const parent = textNode.parentNode;
-            const text = textNode.textContent;
-            const fragment = document.createDocumentFragment();
-            
-            // Process each character
-            for (let i = 0; i < text.length; i++) {
-                const char = text[i];
-                const span = document.createElement('span');
-                span.className = 'character-reveal';
-                span.textContent = char;
-                span.style.animationDelay = `${globalDelay * 0.05}s`;
-                fragment.appendChild(span);
-                globalDelay++;
-                
-                // Batch DOM updates for performance
-                if (i % 20 === 0 && i > 0) {
-                    await this.delay(5);
-                }
-            }
-            
-            parent.replaceChild(fragment, textNode);
-        }
-        
-        // Append the cloned element
-        container.appendChild(cloned);
-        
-        // Wait for animation to complete
-        const totalDelay = globalDelay * 0.05 * 1000;
-        await this.delay(Math.min(totalDelay, 2000));
-        
-        // Add completion indicator
-        const completion = document.createElement('span');
-        completion.className = 'completion-indicator';
-        completion.innerHTML = ' ✓';
-        completion.style.color = 'var(--accent-emerald)';
-        container.appendChild(completion);
+        // Final smooth scroll to ensure alignment
+        this.scrollToBottom(true);
     }
     
     formatMessage(text) {
-        // Create container for formatted content
         const container = document.createElement('div');
         container.className = 'formatted-content';
         
-        // Process markdown and special formatting
-        let processedText = text;
+        // Convert stars to icons
+        let processedText = this.convertStars(text);
         
-        // Convert stars/asterisks to star icons
-        processedText = this.convertStars(processedText);
-        
-        // Process markdown
+        // Process Markdown
         processedText = this.processMarkdown(processedText);
         
-        // Split by double newlines to create paragraphs
-        const paragraphs = processedText.split(/\n\n+/);
-        
-        paragraphs.forEach(para => {
-            if (para.trim()) {
-                const p = document.createElement('p');
-                p.innerHTML = this.processInlineFormatting(para.trim());
-                container.appendChild(p);
-            }
-        });
-        
+        container.innerHTML = processedText;
         return container;
     }
     
     convertStars(text) {
-        // Convert ★, ⭐, or ** to star icons
-        return text.replace(/(★|⭐|\*\*)/g, '<i class="fas fa-star star-icon"></i>');
+        return text.replace(/(★|⭐)/g, '<i class="fas fa-star star-icon"></i>');
     }
     
     processMarkdown(text) {
-        // Process headers
+        // Escape HTML to prevent XSS (basic)
+        // Note: In a production app, use a sanitizer library. 
+        // Here we trust the bot output mostly, but let's be safe-ish.
+        // We actually want to allow some HTML we generate.
+        
+        // Headers
         text = text.replace(/^### (.*$)/gim, '<h3>$1</h3>');
         text = text.replace(/^## (.*$)/gim, '<h2>$1</h2>');
         text = text.replace(/^# (.*$)/gim, '<h1>$1</h1>');
         
-        // Process bold (**text**)
+        // Bold (**text**)
         text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         
-        // Process italic (*text*)
+        // Italic (*text*)
         text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
         
-        // Process inline code (`code`)
+        // Inline code (`code`)
         text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
         
-        // Process code blocks (```code```)
+        // Code blocks (```code```)
         text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
         
-        // Process lists (• or -)
-        text = text.replace(/^[\s]*[•\-]\s+(.*)$/gim, '<li>$1</li>');
+        // Unordered Lists (• or -)
+        // We use a temporary placeholder to avoid regex overlap issues
+        text = text.replace(/^[\s]*[•\-]\s+(.*)$/gim, '<ul><li>$1</li></ul>');
         
-        // Wrap consecutive list items in ul
-        text = text.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+        // Ordered Lists (1. )
+        text = text.replace(/^[\s]*(\d+)\.\s+(.*)$/gim, '<ol><li>$2</li></ol>');
         
-        // Process links [text](url)
+        // Fix consecutive lists
+        // Replace </ul>(\s*)<ul> with nothing (merging lists)
+        // We need to do this carefully.
+        // A simple way is to replace </ul>\n<ul> with just \n or nothing.
+        text = text.replace(/<\/ul>\s*<ul>/g, '');
+        text = text.replace(/<\/ol>\s*<ol>/g, '');
+        
+        // Links [text](url)
         text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
         
-        // Process horizontal rules
+        // Horizontal Rules
         text = text.replace(/^---$/gim, '<hr>');
         
-        // Process line breaks
-        text = text.replace(/\n/g, '<br>');
+        // Note: We are relying on white-space: pre-wrap for newlines.
+        // So we don't strictly need <br>, but we might want to trim excessive newlines
+        // around block elements if desired. For now, pre-wrap is safest for "what you see is what you get".
         
-        return text;
-    }
-    
-    processInlineFormatting(text) {
-        // Ensure emojis are preserved
-        // Process emoji codes if needed
         return text;
     }
     
@@ -393,15 +405,8 @@ class PremiumChatBot {
         return `${hours}:${minutes}`;
     }
     
-    scrollToBottom(smooth = true) {
-        if (smooth) {
-            this.chatMessages.scrollTo({
-                top: this.chatMessages.scrollHeight,
-                behavior: 'smooth'
-            });
-        } else {
-            this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-        }
+    scrollToBottom() {
+        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
     
     delay(ms) {
@@ -425,10 +430,12 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', () => {
     const chatbot = new PremiumChatBot();
     
-    // Focus on input for better UX
-    setTimeout(() => {
-        document.getElementById('messageInput').focus();
-    }, 500);
+    // Focus on input for better UX (Desktop only)
+    if (window.innerWidth > 768) {
+        setTimeout(() => {
+            document.getElementById('messageInput').focus();
+        }, 500);
+    }
     
     // Auto-scroll on window resize
     window.addEventListener('resize', () => {
@@ -453,8 +460,8 @@ document.addEventListener('keydown', (e) => {
         }
     }
     
-    // Focus input with '/' key
-    if (e.key === '/' && document.activeElement !== document.getElementById('messageInput')) {
+    // Focus input with '/' key (Desktop only)
+    if (window.innerWidth > 768 && e.key === '/' && document.activeElement !== document.getElementById('messageInput')) {
         e.preventDefault();
         document.getElementById('messageInput').focus();
     }

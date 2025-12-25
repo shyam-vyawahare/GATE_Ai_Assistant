@@ -5,8 +5,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 import os
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import json
+import random
 
 app = FastAPI(title="GATE/NET Exam Assistant", version="1.0.0")
 
@@ -43,12 +44,10 @@ GATE_SUBJECTS = [
     "Biotechnology (BT)", "Mathematics (MA)", "Physics (PH)"
 ]
 
-NET_SUBJECTS = [
-    "Computer Science", "Electronics", "Electrical", "Mechanical", "Civil",
-    "Chemical", "Biotechnology", "Mathematics", "Physics", "Chemistry"
-]
+SESSIONS: Dict[str, List[Dict[str, str]]] = {}
+MAX_CONTEXT_MESSAGES = 10
 
-async def get_openai_response(message: str) -> str:
+async def get_openai_response(message: str, user_id: Optional[str]) -> str:
     """Get response from OpenAI API for GATE/NET exam preparation"""
     try:
         # Check if OpenAI API key is configured
@@ -57,41 +56,48 @@ async def get_openai_response(message: str) -> str:
         
         # Real OpenAI API call
         async with httpx.AsyncClient() as client:
-            # Create a specialized prompt for GATE/NET exam preparation
-            system_prompt = """You are an expert GATE and NET exam preparation assistant for engineering students. 
-            You help students with:
-            1. Subject-specific questions (CS, IT, EC, EE, ME, CE, CH, BT, MA, PH)
-            2. Problem-solving techniques
-            3. Important formulas and concepts
-            4. Previous year question analysis
-            5. Study strategies and tips
-            6. Time management advice
-            7. Mock test preparation
+            system_prompt = (
+                "You are a highly knowledgeable and professional GATE/NET Exam Assistant. "
+                "Your goal is to help engineering students prepare for their exams effectively.\n\n"
+                "GUIDELINES:\n"
+                "1. STRUCTURE: Use clear Headings (###), Bullet points (-), and Bold text (**text**) for emphasis.\n"
+                "2. DEPTH: Provide step-by-step explanations, key formulas, and conceptual clarity. Avoid superficial answers.\n"
+                "3. FORMATTING: Use Markdown code blocks for code or complex formulas. Ensure proper spacing between sections.\n"
+                "4. CONTEXT: Remember previous interactions if relevant.\n"
+                "5. TONE: Professional, encouraging, and academic.\n\n"
+                "When answering:\n"
+                "- Start with a direct answer or definition.\n"
+                "- Break down complex topics into digestible parts.\n"
+                "- Provide an example or application if applicable.\n"
+                "- End with a study tip or a related topic to explore."
+            )
+
+            history: List[Dict[str, str]] = []
+            if user_id:
+                existing = SESSIONS.get(user_id, [])
+                history = existing[-MAX_CONTEXT_MESSAGES:]
             
-            Always provide:
-            - Clear, step-by-step explanations
-            - Relevant formulas when applicable
-            - Tips for exam preparation
-            - Encouragement and motivation
-            
-            Keep responses concise but comprehensive, suitable for exam preparation."""
+            # Prepare messages payload
+            messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": message}]
             
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 json={
                     "model": "gpt-3.5-turbo",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": message}
-                    ],
-                    "max_tokens": 500,
+                    "messages": messages,
+                    "max_tokens": 800,
                     "temperature": 0.7
                 }
             )
             
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                content = response.json()["choices"][0]["message"]["content"]
+                if user_id:
+                    session = SESSIONS.setdefault(user_id, [])
+                    session.append({"role": "user", "content": message})
+                    session.append({"role": "assistant", "content": content})
+                return content
             else:
                 return get_mock_gate_response(message)
     
@@ -103,204 +109,153 @@ def get_mock_gate_response(message: str) -> str:
     """Mock responses for GATE/NET exam preparation when OpenAI API is not available"""
     message_lower = message.lower()
     
-    # GATE/NET specific responses
-    if any(subject in message_lower for subject in ["computer science", "cs", "programming"]):
-        return """**Computer Science GATE Preparation Tips:**
+    # Computer Science
+    if any(subject in message_lower for subject in ["computer science", "cs", "programming", "algo", "data structure"]):
+        return r"""### Computer Science (CS) GATE Strategy
 
-🔹 **Core Topics to Focus:**
-• Data Structures & Algorithms
-• Operating Systems
-• Computer Networks
-• Database Management
-• Computer Organization
+**1. High-Weightage Subjects**
+The following subjects carry maximum marks in GATE:
+- **Data Structures & Algorithms:** Focus on Arrays, Linked Lists, Trees, Graphs, Sorting, and Searching.
+- **Operating Systems:** Process Management, Synchronization (Semaphores), Deadlock, and Paging.
+- **Computer Networks:** IP Addressing, TCP/UDP, and Routing Algorithms.
+- **Database Management:** Normalization, SQL, and Transactions.
 
-🔹 **Important Formulas:**
-• Time Complexity Analysis
-• Memory Management
-• Network Protocols
+**2. Important Concepts & Formulas**
+- **Time Complexity:** Master the Master Theorem for recurrences ($T(n) = aT(n/b) + f(n)$).
+- **Graph Theory:** DFS/BFS complexity is $O(V+E)$. Dijkstra's is $O(E \log V)$.
 
-🔹 **Study Strategy:**
-1. Solve previous year questions
-2. Practice coding problems daily
-3. Focus on core concepts
-4. Take mock tests regularly
+**3. Study Plan**
+- **Month 1:** Cover Algorithms and DS thoroughly.
+- **Month 2:** OS and Architecture.
+- **Month 3:** Practice mock tests and revise weak areas.
 
-💡 **Tip:** Start with Data Structures as it's the foundation for most CS topics!"""
-    
-    elif any(subject in message_lower for subject in ["electronics", "ec", "circuit"]):
-        return """**Electronics GATE Preparation Guide:**
+**💡 Pro Tip:** *Don't just read theory. Solve GATE Previous Year Questions (PYQs) for the last 15 years.*"""
 
-🔹 **Key Topics:**
-• Electronic Devices & Circuits
-• Digital Electronics
-• Communication Systems
-• Control Systems
-• Signals & Systems
+    # Electronics
+    elif any(subject in message_lower for subject in ["electronics", "ec", "circuit", "analog", "digital"]):
+        return r"""### Electronics & Communication (EC) Preparation
 
-🔹 **Important Formulas:**
-• Ohm's Law: V = IR
-• Power: P = VI
-• Frequency: f = 1/T
-• Gain: Av = Vout/Vin
+**1. Core Topics**
+- **Network Theory:** KCL, KVL, Thevenin’s & Norton’s Theorems.
+- **Signals & Systems:** Fourier Transform, Laplace Transform, Z-Transform.
+- **Control Systems:** Bode Plots, Routh-Hurwitz Criterion, Root Locus.
+- **Analog Circuits:** Op-Amps, Diodes, BJT/FET biasing.
 
-🔹 **Study Plan:**
-1. Master basic circuit analysis
-2. Practice numerical problems
-3. Understand device characteristics
-4. Focus on digital logic design
+**2. Essential Formulas**
+- **Ohm's Law:** $V = I \times R$
+- **Power:** $P = V \times I$
+- **Resonant Frequency:** $f_0 = \frac{1}{2\pi\sqrt{LC}}$
 
-💡 **Tip:** Practice circuit analysis problems daily!"""
-    
-    elif any(subject in message_lower for subject in ["electrical", "ee", "power"]):
-        return """**Electrical Engineering GATE Tips:**
+**3. Strategy**
+- Start with Network Theory as it forms the base.
+- Practice numericals daily.
+- Focus on accuracy as negative marking can hurt your rank.
 
-🔹 **Core Subjects:**
-• Power Systems
-• Electrical Machines
-• Control Systems
-• Power Electronics
-• Electrical Measurements
+**💡 Pro Tip:** *Master the calculator tricks for complex number calculations to save time in the exam.*"""
 
-🔹 **Key Formulas:**
-• Power: P = √3 × VL × IL × cos(φ)
-• Efficiency: η = (Output/Input) × 100%
-• Voltage Regulation: VR = (Vnl - Vfl)/Vfl × 100%
+    # Electrical
+    elif any(subject in message_lower for subject in ["electrical", "ee", "power system", "machine"]):
+        return r"""### Electrical Engineering (EE) Guide
 
-🔹 **Preparation Strategy:**
-1. Focus on power system analysis
-2. Practice machine problems
-3. Understand control theory
-4. Master electrical measurements
+**1. Major Subjects**
+- **Power Systems:** Transmission lines, Fault analysis, Stability.
+- **Electrical Machines:** Transformers, Induction Motors, DC Machines.
+- **Power Electronics:** Choppers, Inverters, Rectifiers.
+- **Control Systems:** Transfer functions, Stability analysis.
 
-💡 **Tip:** Power systems carry maximum weightage!"""
-    
-    elif any(subject in message_lower for subject in ["mechanical", "me", "thermodynamics"]):
-        return """**Mechanical Engineering GATE Strategy:**
+**2. Key Formulas**
+- **Synchronous Speed:** $N_s = \frac{120f}{P}$
+- **Transformer EMF:** $E = 4.44 f \phi_m N$
 
-🔹 **Important Topics:**
-• Thermodynamics
-• Fluid Mechanics
-• Strength of Materials
-• Machine Design
-• Manufacturing Processes
+**3. Preparation Tips**
+- Understand the phasor diagrams thoroughly.
+- Solve numerical problems from standard textbooks like *Kothari & Nagrath*.
+- Regularly revise formula sheets.
 
-🔹 **Essential Formulas:**
-• First Law: ΔU = Q - W
-• Efficiency: η = Wnet/Qin
-• Stress: σ = F/A
-• Strain: ε = ΔL/L
+**💡 Pro Tip:** *Power Systems and Machines usually have high weightage and often connected questions.*"""
 
-🔹 **Study Approach:**
-1. Master thermodynamics cycles
-2. Practice fluid mechanics problems
-3. Understand material properties
-4. Focus on design principles
+    # Mechanical
+    elif any(subject in message_lower for subject in ["mechanical", "me", "thermodynamics", "fluid"]):
+        return r"""### Mechanical Engineering (ME) Strategy
 
-💡 **Tip:** Thermodynamics and fluid mechanics are scoring subjects!"""
-    
-    elif "formula" in message_lower or "equation" in message_lower:
-        return """**Common GATE Formulas by Subject:**
+**1. Critical Subjects**
+- **Thermodynamics:** Laws of thermodynamics, Entropy, Cycles (Otto, Diesel).
+- **Fluid Mechanics:** Bernoulli’s equation, Laminar flow, Boundary layer.
+- **Strength of Materials:** Stress-strain, Bending moment, Torsion.
+- **Theory of Machines:** Mechanisms, Gears, Vibrations.
 
-🔹 **Computer Science:**
-• Time Complexity: O(n), O(n²), O(log n)
-• Memory: 1 KB = 1024 bytes
-• Network: Bandwidth × Delay = Data
+**2. Important Equations**
+- **First Law:** $Q = \Delta U + W$
+- **Bernoulli:** $P + \frac{1}{2}\rho v^2 + \rho gh = \text{constant}$
 
-🔹 **Electronics:**
-• V = IR (Ohm's Law)
-• P = VI (Power)
-• f = 1/T (Frequency)
+**3. Approach**
+- Focus on conceptual understanding before jumping to formulas.
+- Practice solving problems without a calculator first to build speed.
 
-🔹 **Electrical:**
-• P = √3 × VL × IL × cos(φ)
-• η = (Output/Input) × 100%
+**💡 Pro Tip:** *Manufacturing Science has a vast syllabus but questions are often straightforward. Don't skip it!*"""
 
-🔹 **Mechanical:**
-• ΔU = Q - W (First Law)
-• σ = F/A (Stress)
-• ε = ΔL/L (Strain)
+    # General Strategy
+    elif any(word in message_lower for word in ["help", "guide", "strategy", "prepare", "start", "tips"]):
+        return """### 🎯 GATE/NET Exam Success Strategy
 
-💡 **Tip:** Create a formula sheet for quick revision!"""
-    
-    elif any(word in message_lower for word in ["help", "guide", "strategy"]):
-        return """**GATE/NET Exam Preparation Strategy:**
+**1. Understand the Syllabus**
+- Download the official syllabus for your branch.
+- Identify high-weightage topics based on previous years' analysis.
 
-🎯 **3-Month Study Plan:**
+**2. Create a Study Schedule**
+- **Foundation Phase (2-3 months):** Cover all core subjects.
+- **Practice Phase (2 months):** Solve topic-wise tests and PYQs.
+- **Revision Phase (1 month):** Full-length mock tests and formula revision.
 
-**Month 1: Foundation**
-• Revise core subjects
-• Solve basic problems
-• Create formula sheets
+**3. Resources**
+- **Standard Textbooks:** Stick to 1-2 good books per subject.
+- **NPTEL Lectures:** Great for deep conceptual understanding.
+- **Test Series:** Essential for time management.
 
-**Month 2: Advanced Topics**
-• Practice previous year questions
-• Take subject-wise tests
-• Focus on weak areas
+**4. Golden Rules**
+- **Consistency:** Study 4-6 hours daily.
+- **Notes:** Make your own short notes for quick revision.
+- **Analysis:** Analyze every mock test mistake.
 
-**Month 3: Mock Tests**
-• Daily mock tests
-• Time management practice
-• Final revision
+**💡 Motivation:** *The pain of discipline is far less than the pain of regret. Start today!*"""
 
-📚 **Study Resources:**
-• Previous year papers
-• Standard textbooks
-• Online mock tests
-• Video lectures
+    # Greetings
+    elif any(word in message_lower for word in ["hello", "hi", "hey", "greeting"]):
+        return """### 👋 Welcome to GATE/NET Assistant!
 
-⏰ **Time Management:**
-• 2-3 hours daily study
-• Weekend mock tests
-• Regular revision
+I am here to help you crack your engineering exams. I can assist you with:
 
-💡 **Success Tip:** Consistency is key! Study daily rather than cramming."""
-    
-    elif any(word in message_lower for word in ["hello", "hi", "start"]):
-        return """🤖 **Welcome to GATE/NET Exam Assistant!**
+- **Subject-wise Preparation Strategies** (CS, EC, EE, ME, CE)
+- **Important Formulas & Concepts**
+- **Mock Test Planning**
+- **Doubt Resolution**
 
-I'm here to help you prepare for your GATE and NET engineering exams. I can assist with:
+**Try asking me:**
+- *"How to prepare for Computer Science GATE?"*
+- *"Important formulas for Thermodynamics"*
+- *"Explain Time Complexity"*
+- *"Best books for Electronics"*
 
-📚 **Subject Help:**
-• Computer Science, Electronics, Electrical, Mechanical
-• Problem-solving techniques
-• Important formulas and concepts
+Let's get started! What subject are you focusing on today?"""
 
-📖 **Study Guidance:**
-• Preparation strategies
-• Time management tips
-• Mock test preparation
-
-💡 **Try asking:**
-• "Help me with Computer Science topics"
-• "What are important formulas for Electronics?"
-• "Give me study strategy for GATE"
-• "Explain thermodynamics concepts"
-
-Let's ace your exam together! 🎯✨"""
-    
+    # Default fallback
     else:
-        return f"""I understand you're asking about: "{message}"
+        return f"""### I'm listening...
 
-For GATE/NET exam preparation, I can help you with:
+I noticed you said: *"{message}"*
 
-🔹 **Subject-specific guidance** (CS, EC, EE, ME, CE, etc.)
-🔹 **Problem-solving techniques**
-🔹 **Important formulas and concepts**
-🔹 **Study strategies and tips**
-🔹 **Mock test preparation**
+To give you the best advice, could you please specify which **Subject** or **Exam** (GATE/NET) you are referring to?
 
-Try asking about specific subjects like:
-• "Help with Computer Science topics"
-• "Electronics formulas"
-• "Mechanical engineering concepts"
-• "Study strategy for GATE"
+**I can help with:**
+- 📘 Detailed subject strategies
+- 📐 Key formulas and definitions
+- 📅 Study plans and time management
+- ❓ Concept explanations
 
-Or ask for general guidance:
-• "How to prepare for GATE?"
-• "Important topics for NET exam"
-• "Time management tips"
-
-What specific topic would you like help with? 📚"""
+**Example Queries:**
+- *"Explain normalization in DBMS"*
+- *"What is the syllabus for GATE Mechanical?"*
+- *"Tips for Engineering Mathematics"*"""
 
 async def get_weather_data(city: str = "London") -> dict:
     """Get weather data from OpenWeatherMap API"""
@@ -353,11 +308,11 @@ async def chat_endpoint(chat_message: ChatMessage):
             weather_data = await get_weather_data(city)
             
             if "error" not in weather_data:
-                weather_response = f"Weather in {weather_data['city']}, {weather_data['country']}:\n"
-                weather_response += f"Temperature: {weather_data['temperature']}°C\n"
-                weather_response += f"Description: {weather_data['description']}\n"
-                weather_response += f"Humidity: {weather_data['humidity']}%\n"
-                weather_response += f"Wind Speed: {weather_data['wind_speed']} m/s"
+                weather_response = f"### Weather in {weather_data['city']}, {weather_data['country']}\n\n"
+                weather_response += f"- **Temperature:** {weather_data['temperature']}°C\n"
+                weather_response += f"- **Condition:** {weather_data['description'].capitalize()}\n"
+                weather_response += f"- **Humidity:** {weather_data['humidity']}%\n"
+                weather_response += f"- **Wind Speed:** {weather_data['wind_speed']} m/s"
                 
                 return ChatResponse(
                     response=weather_response,
@@ -370,7 +325,7 @@ async def chat_endpoint(chat_message: ChatMessage):
                 )
         
         # Get GATE/NET exam preparation response
-        ai_response = await get_openai_response(chat_message.message)
+        ai_response = await get_openai_response(chat_message.message, chat_message.user_id)
         
         return ChatResponse(
             response=ai_response,
